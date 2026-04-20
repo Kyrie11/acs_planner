@@ -1,0 +1,119 @@
+planner:
+  history_horizon_s: 2.0
+  history_dt_s: 0.1
+  output_horizon_s: 8.0
+  output_dt_s: 0.1
+  coarse_eval_horizon_s: 4.0
+  support_eval_horizon_s: 6.0
+  full_cost_horizon_s: 8.0
+  anchor_bin_dt_s: 1.0
+  creep_speed_mps: 1.5
+  max_comfort_brake_mps2: 3.0
+  max_emergency_brake_mps2: 4.5
+
+context:
+  map_front_m: 80.0
+  map_back_m: 30.0
+  map_side_m: 40.0
+  max_agents_total: 32
+  max_agents_interaction: 8
+  agent_radius_m: 60.0
+
+agent_ranking:
+  w_d: 1.0
+  w_t: 2.0
+  w_r: 1.5
+  w_i: 2.0
+
+actions:
+  enable_keep: true
+  enable_branch: true
+  enable_lane_change: true
+  enable_merge: true
+  enable_nudge: true
+  lane_change_duration_s: [2.5, 3.5, 4.5]
+  nudge_offsets_m: [0.3, 0.6]
+  creep_distances_m: [1.0, 2.0, 3.0]
+  terminal_speed_deltas_mps: [-2.0, 0.0, 2.0]
+
+support:
+  anchor_bin_dt_s: 1.0
+  max_total_anchors_per_action: 12
+  max_conflict_anchors: 6
+  max_merge_anchors: 2
+  max_stop_anchors: 2
+  max_interact_anchors: 2
+  compiler_beam_width_online: 32
+  max_atoms_per_action_online: 24
+  compiler_beam_width_teacher: 128
+  max_atoms_per_action_teacher: 96
+
+ranking:
+  rivals_max: 6
+  rival_gap_threshold: 0.35
+  global_topk_budget_online: 48
+  global_topk_budget_teacher: 96
+  min_atoms_for_best_action: 4
+  min_atoms_for_best_conservative_action: 2
+  cert_confidence_delta: 0.05
+
+residual:
+  residual_bank_size_per_bucket: 64
+  residual_bank_candidates_online: 16
+  mc_samples_for_certification: 12
+  shared_residual_seeds_across_rivals: true
+
+cost:
+  lambda_prog: 1.5
+  lambda_route: 2.0
+  lambda_comfort: 1.0
+  lambda_rule: 5.0
+  lambda_safe: 8.0
+  lambda_int: 4.0
+  L_max: 21.5
+
+model:
+  hidden_dim: 256
+  num_heads: 8
+  num_transformer_layers: 3
+  dropout: 0.1
+  ego_dim: 8
+  agent_dim: 12
+  map_dim: 8
+  action_dim: 12
+  anchor_dim: 16
+  residual_bank_dim: 256
+  max_ego_history: 21
+  max_agents: 32
+  max_map_polylines: 128
+  max_atom_anchors: 12
+
+training:
+  prefix_stride_s: 0.5
+  interactive_stride_s: 0.2
+  interactive_margin_threshold: 0.75
+  calibration_split_ratio: 0.1
+  calibration_alpha: 0.05
+  rare_damage_threshold: 0.25
+  rare_reweight_lambda: 4.0
+  batch_size: 32
+  num_workers: 4
+  epochs: 20
+  lr: 0.0003
+  weight_decay: 0.0001
+  rho_loss_weight: 1.0
+  damage_loss_weight: 1.0
+  mu_loss_weight: 1.0
+  var_loss_weight: 0.1
+
+ablation:
+  action_conditioned_support: true
+  decision_topk: true
+  rival_screening: true
+  certification_enabled: true
+  conservative_correction: true
+  frozen_support_eval: true
+  shared_residual_bank: true
+  mu_mode: hybrid
+  use_pairwise_rho_factors: true
+  use_teacher_soft_posterior: true

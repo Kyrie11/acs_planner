@@ -1,0 +1,5 @@
+numpy>=1.23
+PyYAML>=6.0
+torch>=2.0
+tqdm>=4.64
+# nuplan-devkit should be installed in the target environment for preprocessing/simulation.

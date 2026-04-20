@@ -1,0 +1,8 @@
+acs_planner:
+  _target_: planner.nuplan_planner.ACSNuPlanPlanner
+  _convert_: all
+  config_path: null
+  checkpoint_path: null
+  residual_bank_path: null
+  calibrator_path: null
+  device: cuda
