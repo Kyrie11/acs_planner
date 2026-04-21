@@ -142,6 +142,14 @@ def infer_map_version(maps_root: str | Path) -> str:
 def build_scenarios(data_root: str, maps_root: str, db_files: List[str], map_version: str, max_scenarios: int | None = None):
     if NuPlanScenarioBuilder is None or Sequential is None:
         raise RuntimeError("nuPlan devkit is required to preprocess .db files. Please install nuplan-devkit first.")
+
+    print(f"[INFO] build_scenarios: data_root={data_root}", flush=True)
+    print(f"[INFO] build_scenarios: maps_root={maps_root}", flush=True)
+    print(f"[INFO] build_scenarios: map_version={map_version}", flush=True)
+    print(f"[INFO] build_scenarios: num_db_files={len(db_files)}", flush=True)
+    for p in db_files[:10]:
+        print(f"  db_file={p}", flush=True)
+
     builder = NuPlanScenarioBuilder(
         data_root=data_root,
         map_root=maps_root,
@@ -152,6 +160,9 @@ def build_scenarios(data_root: str, maps_root: str, db_files: List[str], map_ver
         max_workers=None,
         verbose=True,
     )
+
+    print("[INFO] NuPlanScenarioBuilder created", flush=True)
+
     scenario_filter = ScenarioFilter(
         scenario_types=None,
         scenario_tokens=None,
@@ -166,8 +177,16 @@ def build_scenarios(data_root: str, maps_root: str, db_files: List[str], map_ver
         shuffle=False,
         ego_route_radius=30.0,
     )
+
+    print("[INFO] ScenarioFilter created", flush=True)
+
     worker = Sequential()
-    return builder.get_scenarios(scenario_filter, worker)
+    print("[INFO] worker created, calling get_scenarios...", flush=True)
+
+    scenarios = builder.get_scenarios(scenario_filter, worker)
+
+    print(f"[INFO] get_scenarios returned {len(scenarios)} scenarios", flush=True)
+    return scenarios
 
 
 def main() -> None:
