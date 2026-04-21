@@ -88,6 +88,14 @@ model:
   max_map_polylines: 128
   max_atom_anchors: 12
 
+
+preprocess:
+  metadata_workers: 1
+  tensor_workers: 1
+  sqlite_mmap_mb: 512
+  teacher_topk_actions: 6
+  teacher_topk_atoms: 24
+
 training:
   prefix_stride_s: 0.5
   interactive_stride_s: 0.2

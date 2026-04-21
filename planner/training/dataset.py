@@ -17,14 +17,24 @@ class ACSTensorDataset(Dataset):
         index_path = self.root / split / "index.pkl"
         if not index_path.exists():
             raise FileNotFoundError(f"Dataset index not found: {index_path}")
-        self.records: List[dict] = load_pickle(index_path)
+        self.records = load_pickle(index_path)
+
+        self.samples = []
+        for record in self.records:
+            path = Path(record["path"]) if "path" in record else (self.root / self.split / record["file"])
+            batch = load_torch(path)
+            if isinstance(batch, list):
+                self.samples.extend(batch)
+            elif isinstance(batch, dict):
+                self.samples.append(batch)
+            else:
+                raise TypeError(f"Unexpected dataset entry type: {type(batch)}")
 
     def __len__(self) -> int:
-        return len(self.records)
+        return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        record = self.records[idx]
-        data = load_torch(record["path"]) if "path" in record else load_torch(self.root / self.split / record["file"])
+    def __getitem__(self, idx: int):
+        data = self.samples[idx]
         tensors = data["tensors"]
         meta = data["meta"]
         output = dict(tensors)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 from typing import Dict, List
 
@@ -33,11 +34,17 @@ class TeacherRunner:
         self.refiner = ActionRefiner(config, self.coarse)
         self.compiler = AtomCompiler(config)
         self.cost = PlannerCost(config)
+        preprocess_cfg = config.get('preprocess', {})
+        self.teacher_topk_actions = int(preprocess_cfg.get('teacher_topk_actions', 0) or 0)
+        self.teacher_topk_atoms = int(preprocess_cfg.get('teacher_topk_atoms', 0) or 0)
 
     def build_candidates(self, ctx: RuntimeContext) -> List[RefinedAction]:
         actions = self.action_generator.generate(ctx)
         refined = self.refiner.refine_actions(ctx, actions)
-        return self._screen_rivals(refined)
+        candidates = self._screen_rivals(refined)
+        if self.teacher_topk_actions > 0:
+            candidates = candidates[: self.teacher_topk_actions]
+        return candidates
 
     def evaluate(self, ctx: RuntimeContext) -> List[TeacherActionResult]:
         candidates = self.build_candidates(ctx)
@@ -45,10 +52,20 @@ class TeacherRunner:
             return []
         results: List[TeacherActionResult] = []
         for action in candidates:
-            support = self.compiler.compile(ctx, action, mode="teacher")
+            support = self.compiler.compile(ctx, action, mode='teacher')
             rho, mu = self._teacher_posterior_and_cost(ctx, action, support)
+            support, rho, mu = self._truncate_atoms_if_needed(support, rho, mu)
             J = expected_cost(rho, mu)
-            results.append(TeacherActionResult(action=action, support=support, rho=rho, mu=mu, J=J, omission_damage=np.zeros_like(rho)))
+            results.append(
+                TeacherActionResult(
+                    action=action,
+                    support=support,
+                    rho=rho,
+                    mu=mu,
+                    J=J,
+                    omission_damage=np.zeros_like(rho),
+                )
+            )
         results.sort(key=lambda r: r.J)
         if len(results) >= 2:
             rival_cost = results[1].J
@@ -57,6 +74,18 @@ class TeacherRunner:
             best_other = min(r.J for j, r in enumerate(results) if j != i)
             results[i].omission_damage = omission_damage_targets(results[i].J, best_other, results[i].rho, results[i].mu)
         return results
+
+    def _truncate_atoms_if_needed(self, support, rho: np.ndarray, mu: np.ndarray):
+        if self.teacher_topk_atoms <= 0 or len(rho) <= self.teacher_topk_atoms:
+            return support, rho, mu
+        keep = np.argsort(rho)[::-1][: self.teacher_topk_atoms]
+        keep = np.sort(keep)
+        truncated_support = copy.copy(support)
+        truncated_support.atoms = [support.atoms[int(idx)] for idx in keep]
+        truncated_rho = rho[keep].astype(np.float64, copy=True)
+        truncated_rho /= np.sum(truncated_rho) + 1e-8
+        truncated_mu = mu[keep].astype(np.float64, copy=True)
+        return truncated_support, truncated_rho, truncated_mu
 
     def _teacher_posterior_and_cost(self, ctx: RuntimeContext, action: RefinedAction, support) -> tuple[np.ndarray, np.ndarray]:
         base_cost = self.cost.evaluate(ctx, action.token, action.refined_traj).total
@@ -68,29 +97,29 @@ class TeacherRunner:
             logit = atom.prior_logit
             for aid, state in atom.assignments.items():
                 anchor = anchor_by_id[aid]
-                if anchor.anchor_type == "stop":
-                    if state.release == "NEVER":
+                if anchor.anchor_type == 'stop':
+                    if state.release == 'NEVER':
                         penalty += 2.0
                         logit += 0.4
-                    elif state.release and state.release.startswith("BIN_"):
-                        penalty += 0.2 * int(state.release.split("_")[-1])
-                if anchor.anchor_type in {"conflict", "merge", "PED_CROSS", "ONCOMING_TURN", "YIELD_ZONE"}:
-                    if state.precedence == "EGO_FIRST":
+                    elif state.release and state.release.startswith('BIN_'):
+                        penalty += 0.2 * int(state.release.split('_')[-1])
+                if anchor.anchor_type in {'conflict', 'merge', 'PED_CROSS', 'ONCOMING_TURN', 'YIELD_ZONE'}:
+                    if state.precedence == 'EGO_FIRST':
                         penalty += 0.8 * anchor.criticality
                         logit -= 0.2 * anchor.criticality
                     else:
                         penalty += 0.2 * anchor.criticality
                         logit += 0.1 * anchor.criticality
-                    if state.gap_state == "CLOSED":
+                    if state.gap_state == 'CLOSED':
                         penalty += 1.0
                         logit += 0.2
-                    elif state.gap_state == "TIGHT":
+                    elif state.gap_state == 'TIGHT':
                         penalty += 0.5
-                if anchor.anchor_type == "branch":
-                    if state.branch == "NONCONFLICTING_BRANCH":
+                if anchor.anchor_type == 'branch':
+                    if state.branch == 'NONCONFLICTING_BRANCH':
                         penalty -= 0.2
                         logit -= 0.05
-                    elif state.branch == "CONFLICTING_BRANCH":
+                    elif state.branch == 'CONFLICTING_BRANCH':
                         penalty += 0.2
                         logit += 0.05
             atom_penalties.append(base_cost + penalty)
@@ -106,8 +135,8 @@ class TeacherRunner:
         if not refined:
             return []
         best = refined[0]
-        threshold = float(self.config["ranking"]["rival_gap_threshold"])
-        max_rivals = int(self.config["ranking"].get("teacher_rival_limit", self.config["ranking"]["rivals_max"]))
+        threshold = float(self.config['ranking']['rival_gap_threshold'])
+        max_rivals = int(self.config['ranking'].get('teacher_rival_limit', self.config['ranking']['rivals_max']))
         survivors = [a for a in refined if a.coarse_score - best.coarse_score <= threshold]
         survivors = survivors[: max_rivals + 1]
         conservative = [a for a in refined if a.is_conservative]
