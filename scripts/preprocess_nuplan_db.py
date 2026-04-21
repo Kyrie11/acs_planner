@@ -69,6 +69,11 @@ class DatasetPreprocessor:
                     ctx = self.context_builder.build(planner_input, initialization)
                     teacher_results = self.teacher.evaluate(ctx)
                 except Exception as exc:
+                    print(
+                        f"[ERROR] split={split}, scenario={getattr(scenario, 'token', 'unknown')}, "
+                        f"iter={current_iter}, exc={type(exc).__name__}: {exc}",
+                        flush=True
+                    )
                     current_iter += default_step
                     continue
                 if not teacher_results:
