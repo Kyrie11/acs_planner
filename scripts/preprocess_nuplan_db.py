@@ -184,17 +184,42 @@ def main() -> None:
     parser.add_argument("--max-prefixes-per-scenario", type=int, default=None)
     args = parser.parse_args()
 
+    print("[INFO] loading config...", flush=True)
     config = load_yaml(args.config)
+
+    print("[INFO] loading config...", flush=True)
     output_root = ensure_dir(args.output_root)
+
     map_version = args.map_version or infer_map_version(args.maps_root)
+    print("[INFO] creating output root...", flush=True)
 
+    print("[INFO] discovering train db files...", flush=True)
     train_db_files = discover_db_files(args.data_root, args.train_splits)
-    val_db_files = discover_db_files(args.data_root, args.val_splits)
-    train_scenarios = build_scenarios(args.data_root, args.maps_root, train_db_files, map_version, args.max_train_scenarios)
-    val_scenarios = build_scenarios(args.data_root, args.maps_root, val_db_files, map_version, args.max_val_scenarios)
+    print(f"[INFO] found {len(train_db_files)} train db files", flush=True)
+    for p in train_db_files[:5]:
+        print(f"  train_db: {p}", flush=True)
 
+    print("[INFO] discovering val db files...", flush=True)
+    val_db_files = discover_db_files(args.data_root, args.val_splits)
+    print(f"[INFO] found {len(val_db_files)} val db files", flush=True)
+    for p in val_db_files[:5]:
+        print(f"  val_db: {p}", flush=True)
+
+    print("[INFO] building train scenarios...", flush=True)
+    train_scenarios = build_scenarios(args.data_root, args.maps_root, train_db_files, map_version, args.max_train_scenarios)
+    print(f"[INFO] built {len(train_scenarios)} train scenarios", flush=True)
+
+    print("[INFO] building val scenarios...", flush=True)
+    val_scenarios = build_scenarios(args.data_root, args.maps_root, val_db_files, map_version, args.max_val_scenarios)
+    print("[INFO] building val scenarios...", flush=True)
+
+    print("[INFO] creating preprocessor...", flush=True)
     processor = DatasetPreprocessor(config, output_root)
+
+    print("[INFO] start processing train scenarios...", flush=True)
     processor.process_scenarios(train_scenarios, split="train", max_prefixes_per_scenario=args.max_prefixes_per_scenario)
+
+    print("[INFO] start processing val scenarios...", flush=True)
     processor.process_scenarios(val_scenarios, split="val", max_prefixes_per_scenario=args.max_prefixes_per_scenario)
 
 

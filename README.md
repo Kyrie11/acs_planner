@@ -125,8 +125,8 @@ python scripts/preprocess_nuplan_db.py \
   --config planner/configs/default.yaml \
   --data-root /data0/senzeyu2/dataset/nuplan/data/cache \
   --maps-root /data0/senzeyu2/dataset/nuplan/maps \
-  --output-root ./cache/tensor_dataset \
-  --train-splits train_boston train_vegas_1 train_pittsburgh train_singapore \
+  --output-root /data0/senzeyu2/dataset/nuplan/data/cache/tensor_dataset \
+  --train-splits train_boston train_vegas_2 train_pittsburgh train_singapore \
   --val-splits val
 ```
 
