@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional
 
 import numpy as np
@@ -7,10 +8,57 @@ import numpy as np
 from planner.common.geometry import SE2, compute_headings, cumulative_arc_length, interpolate_polyline, project_point_to_polyline
 from planner.runtime.types import MapPolyline, RouteBranch, RouteInfo
 
+class StaticRouteInfo:
+    route_centerline: np.ndarry
+    route_lane_graph: Dict[str, List[str]]
+    goal_progress_s: float
+
 
 class RouteBuilder:
     def __init__(self, config: dict):
         self.config = config
+
+    def build_static_route(
+        self,
+        ego_pose: SE2,
+        map_api: Any,
+        route_roadblock_ids: List[str],
+        map_polylines: List[MapPolyline],
+        mission_goal: Any,
+    ) -> StaticRouteInfo:
+        route_centerline = self._build_centerline_from_route(map_api, route_roadblock_ids)
+        if len(route_centerline) < 2:
+            route_centerline = self._build_centerline_from_map(ego_pose, map_polylines)
+        if len(route_centerline) < 2:
+            route_centerline = self._fallback_straight_centerline(ego_pose)
+
+        goal_progress_s = float(cumulative_arc_length(route_centerline)[-1]) if len(route_centerline) else 0.0
+        route_lane_graph = self._build_route_lane_graph(route_roadblock_ids)
+        return StaticRouteInfo(
+            route_centerline=route_centerline,
+            route_lane_graph=route_lane_graph,
+            goal_progress_s=goal_progress_s
+        )
+
+    def build_from_static(
+            self,
+            ego_pose: SE2,
+            map_api: Any,
+            map_polylines: List[MapPolyline],
+            static_route: StaticRouteInfo
+    )-> RouteInfo:
+        current_lane_id = self._infer_current_lane_id(ego_pose, map_polylines)
+        route_branches = self._extract_branches(static_route.route_centerline, map_polylines)
+        reference_speed_limit_mps = self._estimate_speed_limit(map_api, current_lane_id)
+
+        return RouteInfo(
+            route_centerline=static_route.route_centerline,
+            route_lane_graph=static_route.route_lane_graph,
+            route_branches=route_branches,
+            goal_progress_s=static_route.goal_progress_s,
+            current_lane_id=current_lane_id,
+            reference_speed_limit_mps=reference_speed_limit_mps,
+        )
 
     def build(
         self,
@@ -20,23 +68,18 @@ class RouteBuilder:
         map_polylines: List[MapPolyline],
         mission_goal: Any,
     ) -> RouteInfo:
-        route_centerline = self._build_centerline_from_route(map_api, route_roadblock_ids)
-        if len(route_centerline) < 2:
-            route_centerline = self._build_centerline_from_map(ego_pose, map_polylines)
-        if len(route_centerline) < 2:
-            route_centerline = self._fallback_straight_centerline(ego_pose)
-        current_lane_id = self._infer_current_lane_id(ego_pose, map_polylines)
-        goal_progress_s = float(cumulative_arc_length(route_centerline)[-1]) if len(route_centerline) else 0.0
-        route_branches = self._extract_branches(route_centerline, map_polylines)
-        route_lane_graph = self._build_route_lane_graph(route_roadblock_ids)
-        reference_speed_limit_mps = self._estimate_speed_limit(map_api, current_lane_id)
-        return RouteInfo(
-            route_centerline=route_centerline,
-            route_lane_graph=route_lane_graph,
-            route_branches=route_branches,
-            goal_progress_s=goal_progress_s,
-            current_lane_id=current_lane_id,
-            reference_speed_limit_mps=reference_speed_limit_mps,
+        static_route = self.build_static_route(
+            ego_pose=ego_pose,
+            map_api=map_api,
+            route_roadblock_ids=route_roadblock_ids,
+            map_polylines=map_polylines,
+            mission_goal=mission_goal,
+        )
+        return self.build_from_static(
+            ego_pose=ego_pose,
+            map_api=map_api,
+            map_polylines=map_polylines,
+            static_route=static_route,
         )
 
     def _build_centerline_from_route(self, map_api: Any, route_roadblock_ids: List[str]) -> np.ndarray:

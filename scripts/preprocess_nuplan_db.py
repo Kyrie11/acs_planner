@@ -82,12 +82,16 @@ class DatasetPreprocessor:
                 winner = teacher_results[0]
                 margin = teacher_results[1].J - winner.J if len(teacher_results) > 1 else 999.0
                 interaction_active = len(ctx.agents_interaction) > 0 and any(a.anchor_type in {"conflict", "merge", "PED_CROSS", "stop", "ONCOMING_TURN", "YIELD_ZONE"} for a in winner.support.anchors)
+
+                prefix_samples: List[dict] = []
+
                 for action_result in teacher_results:
                     support = action_result.support
                     for atom_idx, atom in enumerate(support.atoms):
                         tensors = build_scene_action_atom_tensors(ctx, action_result.action, atom, support, self.config)
                         sample_id = f"{scenario.token}_{current_iter}_{action_result.action.action_id}_{atom_idx}"
                         meta = {
+                            "sample_id": sample_id,
                             "scenario_token": scenario.token,
                             "scenario_type": getattr(scenario, "scenario_type", "unknown"),
                             "iteration_index": current_iter,
@@ -96,13 +100,40 @@ class DatasetPreprocessor:
                             "rho_target": float(action_result.rho[atom_idx]),
                             "damage_target": float(action_result.omission_damage[atom_idx]),
                             "mu_target": float(action_result.mu[atom_idx]),
-                            "sample_weight": float(1.0 + self.config["training"]["rare_reweight_lambda"] * (action_result.omission_damage[atom_idx] > self.config["training"]["rare_damage_threshold"])),
-                            "interactive": bool(interaction_active and margin < self.config["training"]["interactive_margin_threshold"]),
+                            "sample_weight": float(
+                                1.0
+                                + self.config["training"]["rare_reweight_lambda"]
+                                * (action_result.omission_damage[atom_idx] > self.config["training"][
+                                    "rare_damage_threshold"])
+                            ),
+                            "interactive": bool(
+                                interaction_active
+                                and margin < self.config["training"]["interactive_margin_threshold"]
+                            ),
                             "margin": float(margin),
                             "residual_bucket": 0,
                         }
-                        path = self.writer.write_sample(split, sample_id, tensors, meta)
-                        records.append({"file": path.name, "path": str(path), "scenario_token": scenario.token, "split": split})
+                        prefix_samples.append(
+                            {
+                                "sample_id": sample_id,
+                                "tensors": tensors,
+                                "meta": meta,
+                            }
+                        )
+
+                if prefix_samples:
+                    batch_id = f"{scenario.token}_{current_iter}"
+                    path = self.writer.write_batch(split, batch_id, prefix_samples)
+                    records.append(
+                        {
+                            "file": path.name,
+                            "path": str(path),
+                            "scenario_token": scenario.token,
+                            "iteration_index": current_iter,
+                            "num_samples": len(prefix_samples),
+                            "split": split,
+                        }
+                    )
                 written += 1
                 if max_prefixes_per_scenario is not None and written >= max_prefixes_per_scenario:
                     break

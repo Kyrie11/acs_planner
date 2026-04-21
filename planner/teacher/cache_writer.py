@@ -21,3 +21,9 @@ class CacheWriter:
         path = out_dir / "index.pkl"
         save_pickle(records, path)
         return path
+
+    def write_batch(self, split: str, batch_id: str, samples: List[dict]) -> Path:
+        split_dir = ensure_dir(self.root / split)
+        path = split_dir / f"{batch_id}.pt"
+        save_torch(samples, path)
+        return path

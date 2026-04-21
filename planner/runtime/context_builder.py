@@ -11,7 +11,7 @@ from planner.runtime.agent_selector import AgentSelector
 from planner.runtime.map_cache import MapCache
 from planner.runtime.route_builder import RouteBuilder
 from planner.runtime.types import EgoHistoryFrame, RuntimeContext, SceneAgent, TrafficLightEntry
-
+from planner.runtime.route_builder import RouteBuilder, StaticRouteInfo
 LOGGER = setup_logger(__name__)
 
 
@@ -21,13 +21,16 @@ class RuntimeContextBuilder:
         self.route_builder = RouteBuilder(config)
         self.agent_selector = AgentSelector(config)
         self.map_cache = MapCache()
+        self._static_route_cache: Dict[tuple, StaticRouteInfo]={}
 
     def build(self, planner_input: Any, initialization: Any) -> RuntimeContext:
         current_ego = self._extract_current_ego_state(planner_input.history)
         ego_history = self._extract_ego_history(planner_input.history)
         iteration_index = int(getattr(getattr(planner_input, "iteration", None), "index", len(ego_history) - 1))
         scenario_token = self._extract_scenario_token(planner_input, iteration_index)
-        map_cache_key = (scenario_token, iteration_index, "default")
+        grid_x = round(current_ego.pose.x / 10.0)
+        grid_y = round(current_ego.pose.y / 10.0)
+        map_cache_key = (scenario_token, grid_x, grid_y)
         cached = self.map_cache.get(map_cache_key)
         if cached is None:
             ego_xy = np.array([current_ego.pose.x, current_ego.pose.y], dtype=np.float64)
@@ -37,12 +40,30 @@ class RuntimeContextBuilder:
         else:
             map_polylines = cached.polylines
 
-        route_info = self.route_builder.build(
+        route_roadblock_ids = list(getattr(initialization, "route_roadblock_ids", []))
+        mission_goal = getattr(initialization, "mission_goal", None)
+
+        route_cache_key = (
+            scenario_token,
+            tuple(route_roadblock_ids),
+        )
+
+        static_route = self._static_route_cache.get(route_cache_key)
+        if static_route is None:
+            static_route = self.route_builder.build_static_route(
+                ego_pose = current_ego.pose,
+                map_api = initialization.map_api,
+                route_roadblock_ids=route_roadblock_ids,
+                map_polylines=map_polylines,
+                mission_goal=mission_goal
+            )
+            self._static_route_cache[route_cache_key] = static_route
+
+        route_info = self.route_builder.build_from_static(
             ego_pose=current_ego.pose,
             map_api=initialization.map_api,
-            route_roadblock_ids=list(getattr(initialization, "route_roadblock_ids", [])),
             map_polylines=map_polylines,
-            mission_goal=getattr(initialization, "mission_goal", None),
+            static_route=static_route
         )
         raw_agents = self._extract_agents(planner_input.history)
         agents_all, agents_interaction = self.agent_selector.select(

@@ -139,7 +139,7 @@ python scripts/preprocess_nuplan_db.py \
   --config planner/configs/default.yaml \
   --data-root /data0/senzeyu2/dataset/nuplan/data/cache \
   --maps-root /data0/senzeyu2/dataset/nuplan/maps \
-  --output-root ./cache/tensor_dataset_smoke \
+  --output-root /data0/senzeyu2/dataset/nuplan/data/cache/tensor_dataset_smoke \
   --train-splits train_boston \
   --val-splits val \
   --max-train-scenarios 8 \
